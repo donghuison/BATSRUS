@@ -17,8 +17,8 @@ module ModFieldLineThread
   use ModVarIndexes, ONLY: Pe_, p_, nVar
   use ModMultiFluid, ONLY: MassIon_I
   use ModTransitionRegion, ONLY: nPointThreadMax=>nPointMax,           &
-       DsThreadMin=>Ds0, rChromo, LengthPavrSi_, dLogLambdaOverDlogT_, &
-       HeatFluxLength_, iTableTr, integrate_emission
+       DsThreadMin=>Ds0, rChromo, PavrL_, TrTable_V, &
+       HeatFluxL_, iTableTr, integrate_emission
 
   implicit none
   SAVE
@@ -160,9 +160,10 @@ module ModFieldLineThread
   public :: beta_thread               ! Accounts for grid sizes in TR and SC
   ! Saves thread state into restart
   public :: save_thread_restart
+  public :: save_plot_thread
 
   ! Visualization, log vars
-  public :: set_ur_top_tr, set_u_top_tr, set_u_bot_tr
+  public :: set_ur_bot_sc, set_ur_top_tr, set_u_top_tr, set_u_bot_tr
   public :: set_u_min_tr, set_u_max_tr
   ! interface procedure to easy calculate the CME field
   public :: b_cme_d
@@ -886,14 +887,14 @@ contains
       use ModLookupTable, ONLY: interpolate_lookup_table
       real, intent(in)  :: BLength
       real, intent(out) :: TMax
-      real :: HeatFluxXLength, Value_V(LengthPavrSi_:DlogLambdaOverDlogT_)
+      real :: HeatFluxL
       !------------------------------------------------------------------------
-      HeatFluxXLength = 2*PoyntingFluxPerBSi*&
+      HeatFluxL = 2*PoyntingFluxPerBSi*&
            BLength*No2Si_V(UnitX_)*No2Si_V(UnitB_)
       call interpolate_lookup_table(iTable=iTableTR, Arg2In=0.0, &
-           iVal=HeatFluxLength_, &
-           ValIn=HeatFluxXLength,&
-           Value_V=Value_V,      &
+           iVal=HeatFluxL_, &
+           ValIn=HeatFluxL, &
+           Value_V=TrTable_V,      &
            Arg1Out=TMax,  &
            DoExtrapolate=.false.)
       ! Version Easter 2015
@@ -939,12 +940,13 @@ contains
   end subroutine advance_threads
   !============================================================================
   subroutine advance_threaded_block_expl(iBlock, iStage, &
-       RightState_VII, LeftState_VII, DtIn)
+       RightState_VII, LeftState_VII, DtIn, Dt_II)
 
     integer, intent(in) :: iBlock, iStage
     real, intent(in)    :: RightState_VII(nVar, 1:nJ, 1:nK)
     real, intent(inout) :: LeftState_VII(nVar, 1:nJ, 1:nK)
-    real, optional, intent(in) :: DtIn
+    real, optional, intent(in) :: DtIn, Dt_II(1:nJ, 1:nK)
+
     !--------------------------------------------------------------------------
   end subroutine advance_threaded_block_expl
   !============================================================================
@@ -1944,6 +1946,11 @@ contains
     !==========================================================================
   end subroutine get_tr_los_image
   !============================================================================
+  subroutine set_ur_bot_sc(Var_IIB)
+    real, intent(out) :: Var_IIB(nJ,nK, MaxBlock)
+    !--------------------------------------------------------------------------
+  end subroutine set_ur_bot_sc
+  !============================================================================
   subroutine set_ur_top_tr(Var_IIB)
     real, intent(out) :: Var_IIB(nJ,nK, MaxBlock)
     !--------------------------------------------------------------------------
@@ -1968,6 +1975,11 @@ contains
     real, intent(out) :: Var_IIB(nJ,nK, MaxBlock)
     !--------------------------------------------------------------------------
   end subroutine set_u_max_tr
+  !============================================================================
+  subroutine save_plot_thread(iBlock, j, k)
+    integer, intent(in) :: iBlock, j, k
+    !--------------------------------------------------------------------------
+  end subroutine save_plot_thread
   !============================================================================
 end module ModFieldLineThread
 !==============================================================================
