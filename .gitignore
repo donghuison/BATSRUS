@@ -47,3 +47,4 @@ srcPostProc/*.log
 srcPostProc/*.out
 srcPostProc/*.dat
 srcPostProc/SPECTRUM.in
+.serena/
