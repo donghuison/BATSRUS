@@ -337,7 +337,7 @@ These modified commands cannot precede the #PLANET command!
     <option name="NEPTUNE" 		/>
     <option name="PLUTO" 		/>
     <option name="MOON"			/>
-    <option name="IO"			/>	
+    <option name="IO"			/>
     <option name="EUROPA"		/>
     <option name="GANYMEDE"		/>
     <option name="TITAN"		/>
@@ -356,7 +356,7 @@ These modified commands cannot precede the #PLANET command!
     <parameter name="OmegaPlanet"  type="real" min="0" />
     <if expr="$OmegaPlanet">
       <parameter name="RotAxisTheta" type="real" min="0" max="90"/>
-      <paramater name="RotAxisPhi" type="real" min="0" max="360" if="$RotAxisTheta"/>
+      <parameter name="RotAxisPhi" type="real" min="0" max="360" if="$RotAxisTheta"/>
     </if>
     <parameter name="TypeBField"   type="string" input="select">
       <option name="NONE" />
@@ -382,7 +382,7 @@ NEW			NamePlanet (rest of parameters read for unknown planet)
 DIPOLE			TypeBField
 11.0			MagAxisTheta [deg] rest read if TypeBField=DIPOLE
 289.1			MagAxisPhi   [deg] read if MaxAxisTheta is not 0
--31100.0E-9		DipoleStrength [T]  
+-31100.0E-9		DipoleStrength [T]
 
 The NamePlanet parameter contains the name of the planet
 with arbitrary capitalization. In case the name of the planet
@@ -8675,7 +8675,7 @@ rel			TypeProjStop
 
 </commandgroup>
 
-<commandgroup name="COUPLING PARAMATERS">
+<commandgroup name="COUPLING PARAMETERS">
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!! COUPLING PARAMETERS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
