@@ -57,15 +57,15 @@ contains
     use ModFieldTrace, ONLY: init_mod_field_trace, read_field_trace_param, &
          DoMapEquatorRay
     use ModIO
-    use CON_planet, ONLY: read_planet_var, check_planet_var
-    use CON_star, ONLY: read_star_var
     use ModPlanetConst
+    use CON_planet, ONLY: read_planet_var, check_planet_var, get_planet, &
+         NamePlanet
+    use CON_star, ONLY: read_star_var
     use CON_axes, ONLY: init_axes, get_axes, &
          dLongitudeHgr, dLongitudeHgrDeg, dLongitudeHgi, dLongitudeHgiDeg
     use ModUtilities, ONLY: fix_dir_name, check_dir, make_dir, DoFlush, &
          split_string, join_string, open_file, lower_case, &
          DoWriteCallSequence, StringTestSwmf => StringTest
-    use CON_planet, ONLY: get_planet
     use ModTimeConvert, ONLY: time_int_to_real, time_real_to_int
     use ModReadParam
     use ModMessagePass, ONLY: DoOneCoarserLayer
@@ -343,13 +343,15 @@ contains
        call adjust_freq(AdaptPic, &
             nStep+1, tSimulation+1e-6, IsTimeAccurate)
 
-       ! Initialize axes (coordinate transformation matrices)
-       call init_axes(StartTime)
+       if(NamePlanet /= 'NONE')then
+          ! Initialize axes (coordinate transformation matrices)
+          call init_axes(StartTime)
 
-       if(NameThisComp == 'GM') then
-          ! Set and obtain GM specific parameters from CON_planet and CON_axes
-          call get_axes(tSimulation, MagAxisTiltGsmOut = ThetaTilt)
-          call get_planet(DipoleStrengthOut = DipoleStrengthSi)
+          if(NameThisComp == 'GM') then
+             ! Obtain GM specific parameters from CON_planet and CON_axes
+             call get_axes(tSimulation, MagAxisTiltGsmOut = ThetaTilt)
+             call get_planet(DipoleStrengthOut = DipoleStrengthSi)
+          end if
        end if
 
        if(MonopoleStrengthSi /= 0.0 .or. UseB0Wave)then
@@ -358,11 +360,12 @@ contains
           UseCurlB0   = UseB0Wave
           DoUpdateB0  = .false.
           DtUpdateB0  = -1.0
-       elseif(IsStandAlone .and. NameThisComp=='GM') then
+       elseif(IsStandAlone .and. NameThisComp=='GM')then
           ! Check and set some planet variables (e.g. DoUpdateB0)
-          call check_planet_var(iProc==0, IsTimeAccurate)
+          if(NamePlanet /= 'NONE') &
+               call check_planet_var(iProc==0, IsTimeAccurate)
 
-          if(UseBody)then
+          if(UseBody .and. NamePlanet /= 'NONE')then
              call get_planet(UseRotationOut = UseRotatingBc)
           else
              UseRotatingBc = .false.
@@ -376,7 +379,7 @@ contains
              UseCurlB0   = .false.
              DoUpdateB0  = .false.
              DtUpdateB0  = -1.0
-          else
+          elseif(NamePlanet /= 'NONE')then
              call get_planet( &
                   DoUpdateB0Out = DoUpdateB0, DtUpdateB0Out = DtUpdateB0)
           end if
@@ -1323,6 +1326,23 @@ contains
                          case('c3')
                             rSizeImage_I(iFileInstrument)  = 32.0
                             rOccult_I(iFileInstrument)     = 2.5
+                         case default
+                            call stop_mpi(NameSub//': unknown INS: '//  &
+                                 StringInstrument_I(iInstrument))
+                         end select
+                      case('punch')
+                         TypeSatPos_I(iFileInstrument) = 'earth'
+
+                         nPixel_I(iFileInstrument)         = 300
+                         MuLimbDarkening                   = 0.5
+
+                         select case(trim(NameInstrument))
+                         case('nfi')
+                            rSizeImage_I(iFileInstrument)  = 32.0
+                            rOccult_I(iFileInstrument)     = 6.0
+                         case('wfi')
+                            rSizeImage_I(iFileInstrument)  = 180.0
+                            rOccult_I(iFileInstrument)     = 19.0
                          case default
                             call stop_mpi(NameSub//': unknown INS: '//  &
                                  StringInstrument_I(iInstrument))
@@ -2607,9 +2627,10 @@ contains
           call read_var('BdpDimBody2y', BdpDimBody2_D(2))
           call read_var('BdpDimBody2z', BdpDimBody2_D(3))
 
-       case('#PLANET', '#MOON', '#COMET', '#IDEALAXES', '#ROTATIONAXIS',&
-            '#MAGNETICAXIS', '#MAGNETICCENTER', '#ROTATION', '#DIPOLE', &
-            '#NONDIPOLE', '#UPDATEB0',  '#MULTIPOLEB0')
+       case('#PLANET', '#MOON', '#COMET', '#ORBIT', &
+            '#IDEALAXES', '#ROTATIONAXIS', '#ROTATION', &
+            '#MAGNETICAXIS', '#MAGNETICCENTER', &
+            '#DIPOLE', '#NONDIPOLE', '#MULTIPOLEB0', '#UPDATEB0')
 
           call check_stand_alone
           if(.not.is_first_session())CYCLE READPARAM
@@ -2792,7 +2813,7 @@ contains
              end do
           end if
 
-       case("#PUIGRID")
+       case("#PUIGRID", "#PUIDIFFUSION")
           call read_pui_param(NameCommand)
 
           ! CORONA SPECIFIC COMMANDS
@@ -3298,7 +3319,6 @@ contains
       use ModFieldLineThread, ONLY: DoPlotThreads
       use ModMain, ONLY: iTypeCellBc_I
       use ModCellBoundary, ONLY: NameCellBc_I, nTypeBC, UnknownBC_
-      use CON_planet, ONLY: UseOrbitElements
 
       ! option and module parameters
       character (len=40) :: Name
@@ -3851,13 +3871,13 @@ contains
       ! database is used (venus, mars, mercury)
       do iSat = 1, nSatellite
          if (index(NameFileSat_I(iSat), 'sta') > 0 .or.  &
-                 index(NameFileSat_I(iSat), 'stereoa') > 0) &
-                 NameSat_I(iSat) = 'sta'
+              index(NameFileSat_I(iSat), 'stereoa') > 0) &
+              NameSat_I(iSat) = 'sta'
          if (index(NameFileSat_I(iSat), 'stb') > 0 .or.  &
-                 index(NameFileSat_I(iSat), 'stereob') > 0) &
-                 NameSat_I(iSat) = 'stb'
+              index(NameFileSat_I(iSat), 'stereob') > 0) &
+              NameSat_I(iSat) = 'stb'
          if (index(NameFileSat_I(iSat), 'earth') > 0)    &
-                 NameSat_I(iSat) = 'earth'
+              NameSat_I(iSat) = 'earth'
       end do
 
       ! stop the code if there are two stereo a/b, earth traj files
@@ -3930,17 +3950,6 @@ contains
       if(.not.IsMhd .or. (UseNonConservative .and. nConservCrit == 0) .or. &
            (nStage == 1 .and. IsTimeAccurate) .or. .not.UseHalfStep) &
            UseDbTrickNow = .false.
-
-      if(UseBody2Orbit)then
-         if(.not.UseOrbitElements)then
-            if(iProc == 0)then
-               write(*,'(a)') NameSub//' WARNING: ' &
-                    //'Orbit elements are not availlable for second body orbit'
-               if(UseStrict)call stop_mpi('Correct PARAM.in!')
-            end if
-            UseBody2Orbit = .false.
-         end if
-      end if
 
       if(UseChargedParticles)then
          if(.not.IsTimeAccurate)then

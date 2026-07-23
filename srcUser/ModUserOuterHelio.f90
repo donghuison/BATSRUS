@@ -44,7 +44,7 @@ module ModUser
        UnitX_, Si2No_V, No2Io_V, No2Si_V, Io2No_V, &
        NameTecUnit_V, NameIdlUnit_V, UnitEnergyDens_, &
        UnitN_, UnitRho_, UnitU_, rBody, UnitB_, UnitP_, &
-       UnitTemperature_, UnitT_, UnitRhoU_
+       UnitTemperature_, UnitT_, UnitRhoU_, Gbody
   use ModConst, ONLY: cAU, cProtonMass, cElectronMass, cBoltzmann, cEV, &
        cRyToEv, cSecondPerYear, iYearBase
   use ModTimeConvert, ONLY: n_day_of_year
@@ -69,7 +69,8 @@ module ModUser
        IMPLEMENTED14 => user_init_session,              &
        IMPLEMENTED15 => user_calc_sources_impl,         &
        IMPLEMENTED16 => user_init_point_implicit,       &
-       IMPLEMENTED17 => user_set_boundary_cells
+       IMPLEMENTED17 => user_set_boundary_cells,        &
+       IMPLEMENTED18 => user_amr_criteria
 
   include 'user_module.h' ! list of public methods
 
@@ -213,6 +214,10 @@ module ModUser
   integer :: nSubSample = 5
 
   logical :: UsePuiCxHeliosheath = .true.
+
+  ! Effect of radiation repulsion
+  logical :: UseRadiationRepulsion = .false.
+  real :: RepulsionRatio = 0.1
 
 contains
   !============================================================================
@@ -387,6 +392,11 @@ contains
        case("#SINGLEIONVELOCITYREGION3")
           call read_var('UseSingleIonVelocityRegion3', &
                UseSingleIonVelocityRegion3)
+
+       case("#RADIATIONREPULSION")
+          call read_var('UseRadiationRepulsion', UseRadiationRepulsion)
+          if(UseRadiationRepulsion) &
+               call read_var('RepulsionRatio', RepulsionRatio)
 
        case default
           if(iProc==0) call stop_mpi( &
@@ -1105,76 +1115,94 @@ contains
   !============================================================================
   subroutine user_action(NameAction)
 
+    use ModPui, ONLY: UsePuiDiffusion, DoPuiDiffusion_B
+    use BATL_lib, ONLY: nBlock
+
     character(len=*), intent(in):: NameAction
 
     character(len=*), parameter:: StringFormat = '(10X,A19,F15.6,A11,F15.6)'
+
+    integer :: iBlock
 
     logical:: DoTest
     character(len=*), parameter:: NameSub = 'user_action'
     !--------------------------------------------------------------------------
     call test_start(NameSub, DoTest)
-    if(NameAction /= 'write progress') RETURN
 
-    write(*,StringFormat) 'SwhRhoDim [n/cc]:',SwhRhoDim,'SwhRho:',SwhRho
-    write(*,StringFormat) 'SwhUxDim  [km/s]:',SwhUxDim,'SwhUx:',SwhUx
-    write(*,StringFormat) 'SwhUyDim  [km/s]:',SwhUyDim,'SwhUy:',SwhUy
-    write(*,StringFormat) 'SwhUzDim  [km/s]:',SwhUzDim,'SwhUz:',SwhUz
-    write(*,StringFormat) 'SwhTDim   [   K]:',SwhTDim,'SwhP:',SwhP
-    write(*,StringFormat) 'SwhBxDim  [  nT]:',SwhBxDim,'SwhBx:',SwhBx
-    write(*,StringFormat) 'SwhByDim  [  nT]:',SwhByDim,'SwhBy:',SwhBy
-    write(*,StringFormat) 'SwhBzDim  [  nT]:',SwhBzDim,'SwhBz:',SwhBz
-    write(*,'(10X,A19,F15.6)')           'SwhTDim   [   K]:',SwhTDim
-    write(*,*)
-    write(*,*)
-    write(*,StringFormat) 'VliswRhoDim[n/cc]:',VliswRhoDim,'VliswRho:',VliswRho
-    write(*,StringFormat) 'VliswUxDim[km/s]: ',VliswUxDim,'VliswUx:',VliswUx
-    write(*,StringFormat) 'VliswUyDim[km/s]: ',VliswUyDim,'VliswUy:',VliswUy
-    write(*,StringFormat) 'VliswUzDim[km/s]: ',VliswUzDim,'VliswUz:',VliswUz
-    write(*,StringFormat) 'VliswPDim [nPa]: ',VliswPDim,'VliswP:',VliswP
-    write(*,StringFormat) 'VliswBxDim[nT]: ',VliswBxDim,'VliswBx:',VliswBx
-    write(*,StringFormat) 'VliswByDim[nT]:',VliswByDim,'VliswBy:',VliswBy
-    write(*,StringFormat) 'VliswBzDim[nT]:',VliswBzDim,'VliswBz:',VliswBz
-    write(*,'(10X,A19,F15.6)') 'VliswTDim[K]: ',VliswTDim!
+    select case(NameAction)
 
-    if(iTableSolarWind > 0)then
+    case('write progress')
+       write(*,StringFormat) 'SwhRhoDim [n/cc]:',SwhRhoDim,'SwhRho:',SwhRho
+       write(*,StringFormat) 'SwhUxDim  [km/s]:',SwhUxDim,'SwhUx:',SwhUx
+       write(*,StringFormat) 'SwhUyDim  [km/s]:',SwhUyDim,'SwhUy:',SwhUy
+       write(*,StringFormat) 'SwhUzDim  [km/s]:',SwhUzDim,'SwhUz:',SwhUz
+       write(*,StringFormat) 'SwhTDim   [   K]:',SwhTDim,'SwhP:',SwhP
+       write(*,StringFormat) 'SwhBxDim  [  nT]:',SwhBxDim,'SwhBx:',SwhBx
+       write(*,StringFormat) 'SwhByDim  [  nT]:',SwhByDim,'SwhBy:',SwhBy
+       write(*,StringFormat) 'SwhBzDim  [  nT]:',SwhBzDim,'SwhBz:',SwhBz
+       write(*,'(10X,A19,F15.6)')           'SwhTDim   [   K]:',SwhTDim
        write(*,*)
-       write(*,'(10X,A19,F15.6)') 'RunStart[yr]:', RunStart
-       write(*,'(10X,A19,F15.6)') 'Offset[yr]:',Offset
-    end if
+       write(*,*)
+       write(*,StringFormat) 'VliswRhoDim[n/cc]:',VliswRhoDim,'VliswRho:',VliswRho
+       write(*,StringFormat) 'VliswUxDim[km/s]: ',VliswUxDim,'VliswUx:',VliswUx
+       write(*,StringFormat) 'VliswUyDim[km/s]: ',VliswUyDim,'VliswUy:',VliswUy
+       write(*,StringFormat) 'VliswUzDim[km/s]: ',VliswUzDim,'VliswUz:',VliswUz
+       write(*,StringFormat) 'VliswPDim [nPa]: ',VliswPDim,'VliswP:',VliswP
+       write(*,StringFormat) 'VliswBxDim[nT]: ',VliswBxDim,'VliswBx:',VliswBx
+       write(*,StringFormat) 'VliswByDim[nT]:',VliswByDim,'VliswBy:',VliswBy
+       write(*,StringFormat) 'VliswBzDim[nT]:',VliswBzDim,'VliswBz:',VliswBz
+       write(*,'(10X,A19,F15.6)') 'VliswTDim[K]: ',VliswTDim!
 
-    if(UseNeutralFluid)then
-       ! neutrals
-       write(*,*)
-       write(*,StringFormat) &
-            'RhoNeuWindDim:',RhoNeuWindDim ,'RhoNeutralsISW:',RhoNeutralsISW
-       write(*,StringFormat) &
-            'UxNeuWindDim:',UxNeuWindDim,'UxNeutralsISW:',UxNeutralsISW
-       write(*,StringFormat) &
-            'UyNeuWindDim:',UyNeuWindDim,'UyNeutralsISW:',UyNeutralsISW
-       write(*,StringFormat) &
-            'UzNeuWindDim:',UzNeuWindDim,'UzNeutralsISW:',UzNeutralsISW
-       write(*,StringFormat) &
-            'pNeuWindDim:',pNeuWindDim,'PNeutralsISW:',PNeutralsISW
-       write(*,'(10X,A19,F15.6)') 'TempNeuWindDim:',TempNeuWindDim
-       write(*,*)
-    end if
-    if(.not.IsMhd)then
-       write(*,*)
-       write(*,StringFormat) 'Pu3RhoDim [n/cc]:',Pu3RhoDim,'SwhRho:',Pu3Rho
-       write(*,StringFormat) 'Pu3UxDim  [km/s]:',Pu3UxDim,'Pu3Ux:',Pu3Ux
-       write(*,StringFormat) 'Pu3UyDim  [km/s]:',Pu3UyDim,'Pu3Uy:',Pu3Uy
-       write(*,StringFormat) 'Pu3UzDim  [km/s]:',Pu3UzDim,'Pu3Uz:',Pu3Uz
-       write(*,StringFormat) 'Pu3TDim   [   K]:',Pu3TDim,'Pu3P:',Pu3P
-       write(*,'(10X,A19,F15.6)')           'Pu3TDim   [   K]:',Pu3TDim
-       write(*,*)
-    end if
-    if(UseElectronPressure)then
-       write(*,StringFormat) 'VliswPeDim [nPa]: ', &
-            VliswPeDim,' VliswPe:', VliswPe
-       write(*,'(10X,A19,F15.6)') 'VliswTeDim[K]: ', VliswTeDim
-       write(*,StringFormat) 'SwhTeDim   [   K]:', SwhTeDim, &
-            ' SwhPe:', SwhPe
-    end if
+       if(iTableSolarWind > 0)then
+          write(*,*)
+          write(*,'(10X,A19,F15.6)') 'RunStart[yr]:', RunStart
+          write(*,'(10X,A19,F15.6)') 'Offset[yr]:',Offset
+       end if
+
+       if(UseNeutralFluid)then
+          ! neutrals
+          write(*,*)
+          write(*,StringFormat) &
+               'RhoNeuWindDim:',RhoNeuWindDim ,'RhoNeutralsISW:',RhoNeutralsISW
+          write(*,StringFormat) &
+               'UxNeuWindDim:',UxNeuWindDim,'UxNeutralsISW:',UxNeutralsISW
+          write(*,StringFormat) &
+               'UyNeuWindDim:',UyNeuWindDim,'UyNeutralsISW:',UyNeutralsISW
+          write(*,StringFormat) &
+               'UzNeuWindDim:',UzNeuWindDim,'UzNeutralsISW:',UzNeutralsISW
+          write(*,StringFormat) &
+               'pNeuWindDim:',pNeuWindDim,'PNeutralsISW:',PNeutralsISW
+          write(*,'(10X,A19,F15.6)') 'TempNeuWindDim:',TempNeuWindDim
+          write(*,*)
+       end if
+       if(.not.IsMhd)then
+          write(*,*)
+          write(*,StringFormat) 'Pu3RhoDim [n/cc]:',Pu3RhoDim,'SwhRho:',Pu3Rho
+          write(*,StringFormat) 'Pu3UxDim  [km/s]:',Pu3UxDim,'Pu3Ux:',Pu3Ux
+          write(*,StringFormat) 'Pu3UyDim  [km/s]:',Pu3UyDim,'Pu3Uy:',Pu3Uy
+          write(*,StringFormat) 'Pu3UzDim  [km/s]:',Pu3UzDim,'Pu3Uz:',Pu3Uz
+          write(*,StringFormat) 'Pu3TDim   [   K]:',Pu3TDim,'Pu3P:',Pu3P
+          write(*,'(10X,A19,F15.6)')           'Pu3TDim   [   K]:',Pu3TDim
+          write(*,*)
+       end if
+       if(UseElectronPressure)then
+          write(*,StringFormat) 'VliswPeDim [nPa]: ', &
+               VliswPeDim,' VliswPe:', VliswPe
+          write(*,'(10X,A19,F15.6)') 'VliswTeDim[K]: ', VliswTeDim
+          write(*,StringFormat) 'SwhTeDim   [   K]:', SwhTeDim, &
+               ' SwhPe:', SwhPe
+       end if
+
+    case('load balance done')
+       if(UsePuiDiffusion)then
+          do iBlock = 1, nBlock
+             ! call get_termination_shock(iBlock, DoPuiDiffusion_B(iBlock))
+             call select_region(iBlock)
+             DoPuiDiffusion_B(iBlock) = any(iFluidProduced_C==Ne3_)
+          end do
+       end if
+
+    end select
 
     call test_stop(NameSub, DoTest)
   end subroutine user_action
@@ -1680,8 +1708,9 @@ contains
     real :: HeatElectron
 
     real :: U_DI(3,nFluid)
+    real :: ForcePerRho_D(3)
 
-    integer :: i, j, k
+    integer :: i, j, k, iFluid
 
     logical:: DoTest
     character(len=*), parameter:: NameSub = 'user_calc_sources_expl'
@@ -1860,6 +1889,24 @@ contains
        ! Calculate the source terms for this cell
        call calc_source_cell
     end do; end do; end do
+
+    if(UseRadiationRepulsion)then
+       do iFluid = Neu_, Ne4_
+          if(nFluid > 1) call select_fluid(iFluid)
+
+          do k = 1, nK; do j = 1, nJ; do i = 1, nI
+             if(.not.Used_GB(i,j,k,iBlock)) CYCLE
+
+             ForcePerRho_D = -RepulsionRatio &
+                  *Gbody*Xyz_DGB(:,i,j,k,iBlock)/r_GB(i,j,k,iBlock)**3
+             Source_VC(iRhoUx:iRhoUz,i,j,k) = &
+                  Source_VC(iRhoUx:iRhoUz,i,j,k) &
+                  + State_VGB(iRho,i,j,k,iBlock)*ForcePerRho_D
+             Source_VC(iEnergy,i,j,k) = Source_VC(iEnergy,i,j,k) + &
+                  sum(State_VGB(iRhoUx:iRhoUz,i,j,k,iBlock)*ForcePerRho_D)
+          end do; end do; end do
+       end do
+    end if
 
     call test_stop(NameSub, DoTest, iBlock)
   contains
@@ -2503,11 +2550,11 @@ contains
          XpTop = (VsubTop+URel)/UThNeu
          XmTop = (VsubTop-URel)/UThNeu
 
-         FStarNeu = 0.125*NumDensNeu/cPi/URel/Vpui**2/DeltaVpui*( &
+         FStarNeu = max(0., 0.125*NumDensNeu/cPi/URel/Vpui**2/DeltaVpui*( &
               UThNeu/sqrt(cPi)*(exp(-XmBot**2)-exp(-XpBot**2) &
               +exp(-XpTop**2)-exp(-XmTop**2)) &
               +URel*(erf(XmTop)-erfc(XpTop) &
-              -erf(XmBot)+erfc(XpBot)))
+              -erf(XmBot)+erfc(XpBot))) )
 
          g0xpFSi = UthSwh*h8(Vpui/UThSwh) * No2Si_V(UnitU_)
 
@@ -2645,7 +2692,7 @@ contains
 
       !------------------------------------------------------------------------
       UNeu = norm2(UNeu_D)
-      URel_D = UPui_D - UNeu_D
+      URel_D = USwh_D - UNeu_D
       URel = norm2(URel_D) + 1E-4
       URel2 = URel**2
 
@@ -2685,10 +2732,11 @@ contains
          CumSumFpuiV3 = CumSumFpuiV3 + FStarPui*DeltaVpui*Vpui**3
          CumSumFpuiV4 = CumSumFpuiV4 + FStarPui*DeltaVpui*Vpui**4
 
-         g0xpu3FSi = Vpui/NumDensPui*(PPui/MassFluid_I(Pu3_)/Vpui**2 &
+         g0xpu3FSi = max(1e-32, &
+              Vpui/NumDensPui*(PPui/MassFluid_I(Pu3_)/Vpui**2 &
               + NumDensPui + 4*cPi*( CumSumFpuiV3/Vpui - CumSumFpuiV2 &
               + (Vpui*CumSumFpuiV1 - CumSumFpuiV4/Vpui**2)/3 )) &
-              *No2Si_V(UnitU_)
+              *No2Si_V(UnitU_) )
 
          ! Find the Edges of the bin
          VsubBot = Vpui*exp(-0.5*DeltaLogVpui)
@@ -2699,11 +2747,11 @@ contains
          XpTop = (VsubTop+URel)/UThNeu
          XmTop = (VsubTop-URel)/UThNeu
 
-         FStarNeu = 0.125*NumDensNeu/cPi/URel/Vpui**2/DeltaVpui*( &
+         FStarNeu = max(0., 0.125*NumDensNeu/cPi/URel/Vpui**2/DeltaVpui*( &
               UThNeu/sqrt(cPi)*(exp(-XmBot**2)-exp(-XpBot**2) &
               +exp(-XpTop**2)-exp(-XmTop**2)) &
               +URel*(erf(XmTop)-erfc(XpTop) &
-              -erf(XmBot)+erfc(XpBot)))
+              -erf(XmBot)+erfc(XpBot))) )
 
          SourceFxpu3_I(iPui) = NumDensPui*FStarNeu &
               *sigma_cx(g0xpu3FSi)*g0xpu3FSi &
@@ -2757,17 +2805,17 @@ contains
            *Integralxpu3U1*URel_D*sigma_cx(g0xpu3USi)&
            *No2Si_V(UnitU_)/Si2No_V(UnitN_)/Si2No_V(UnitT_)
 
-      Jpu3x_D = I0pu3x*UPui_D &
+      Jpu3x_D = I0pu3x*USwh_D &
            + SourceUpu3x_D
       Jxpu3_D = I0xpu3*UNeu_D &
            + SourceUxpu3_D
 
       Kpu3x = InvGammaMinus1*SourcePpu3x &
-           + sum(Upui_D*Jpu3x_D) &
-           - 0.5*UPui**2*I0pu3x
+           + sum(USwh_D*Jpu3x_D) &
+           - 0.5*USwh**2*I0pu3x
       Kxpu3 = InvGammaMinus1*SourcePxpu3 &
-           + sum(UPui_D*Jxpu3_D) &
-           - 0.5*UPui**2*I0xpu3
+           + sum(USwh_D*Jxpu3_D) &
+           - 0.5*USwh**2*I0xpu3
     end subroutine calc_charge_exchange_pui
     !==========================================================================
     real function sigma_cx(URelSi)
@@ -2816,7 +2864,7 @@ contains
     real function h8(X)
       real, intent(in):: X
       !------------------------------------------------------------------------
-      h8 = exp(-X**2)/sqrt(cPi) + (0.5/X+X)*erf(X)
+      h8 = exp(-X**2)/sqrt(cPi) + (0.5/(X+1e-32)+X)*erf(X)
     end function h8
     !==========================================================================
     real function h9(X)
@@ -4697,6 +4745,33 @@ contains
     end if
 
   end subroutine user_set_boundary_cells
+  !============================================================================
+  subroutine user_amr_criteria(iBlock, UserCriteria, TypeCriteria, IsFound)
+
+    ! User defined AMR criteria. Set the value of UserCriteria for
+    ! block iBlock. Multiple user criteria can be implemented, distinguished
+    ! by TypeCriteria (starting with 'user'). IsFound should be set to .true.
+    ! if TypeCriteria is recognized.
+
+    integer, intent(in) :: iBlock
+    character(len=*), intent(in) :: TypeCriteria
+    real, intent(out) :: UserCriteria
+    logical, intent(inout) :: IsFound
+
+    logical :: IsRegion2, IsRegion3
+
+    character(len=*), parameter:: NameSub = 'user_amr_criteria'
+    !--------------------------------------------------------------------------
+    UserCriteria = 0.5
+
+    IsFound = .true.
+
+    call select_region(iBlock)
+    IsRegion2 = any(iFluidProduced_C==Ne2_)
+    IsRegion3 = any(iFluidProduced_C==Ne3_)
+    if(IsRegion2 .and. IsRegion3) UserCriteria = 1.0
+
+  end subroutine user_amr_criteria
   !============================================================================
 
 end module ModUser

@@ -337,7 +337,7 @@ These modified commands cannot precede the #PLANET command!
     <option name="NEPTUNE" 		/>
     <option name="PLUTO" 		/>
     <option name="MOON"			/>
-    <option name="IO"			/>	
+    <option name="IO"			/>
     <option name="EUROPA"		/>
     <option name="GANYMEDE"		/>
     <option name="TITAN"		/>
@@ -354,16 +354,21 @@ These modified commands cannot precede the #PLANET command!
     <parameter name="RadiusPlanet" type="real" min="0" />
     <parameter name="MassPlanet"   type="real" min="0" />
     <parameter name="OmegaPlanet"  type="real" min="0" />
-    <parameter name="TiltRotation" type="real" min="0" />
+    <if expr="$OmegaPlanet != 0">
+      <parameter name="RotAxisTheta" type="real" min="0" max="90"/>
+      <parameter name="RotAxisPhi" type="real" min="0" max="360"
+		 if="$RotAxisTheta != 0"/>
+    </if>
     <parameter name="TypeBField"   type="string" input="select">
       <option name="NONE" />
       <option name="DIPOLE" default="T" />
     </parameter>
   </if>
   <if expr="$TypeBField eq 'DIPOLE'">
-    <parameter name="MagAxisThetaGeo" type="real" min="0" max="180"/>
-    <parameter name="MagAxisPhiGeo"   type="real" min="0" max="360"/>
-    <parameter name="DipoleStrength"  type="real"    />
+    <parameter name="MagAxisTheta" type="real" min="0" max="180"/>
+    <parameter name="MagAxisPhi"   type="real" min="0" max="360"
+	       if="$MagAxisTheta != 0"/>
+    <parameter name="DipoleStrength"  type="real"/>
   </if>
   <rule expr="not $PlanetCommand">
     PLANET should precede $PlanetCommand
@@ -374,11 +379,12 @@ NEW			NamePlanet (rest of parameters read for unknown planet)
 6300000.0		RadiusPlanet [m]
 5.976E+24		MassPlanet   [kg]
 0.000000199		OmegaPlanet  [radian/s]
-23.5			TiltRotation [degree]
+23.5			RotAxisTheta [deg] read if OmegaPlanet is not 0
+130.0                   RotAxisPhi   [deg] read if RotAxisTheta is not 0
 DIPOLE			TypeBField
-11.0			MagAxisThetaGeo [degree]
-289.1			MagAxisPhiGeo   [degree]
--31100.0E-9		DipoleStrength  [T]
+11.0			MagAxisTheta [deg] rest read if TypeBField=DIPOLE
+289.1			MagAxisPhi   [deg] read if MagAxisTheta is not 0
+-31100.0E-9		DipoleStrength [T]
 
 The NamePlanet parameter contains the name of the planet
 with arbitrary capitalization. In case the name of the planet
@@ -386,19 +392,18 @@ is not recognized, the following variables are read:
 RadiusPlanet is the radius of the planet,
 MassPlanet is the mass of the planet,
 OmegaPlanet is the angular speed relative to an inertial frame, and
-TiltRotation is the tilt of the rotation axis relative to ecliptic North,
-TypeBField, which can be "NONE" or "DIPOLE".
+RotAxisTheta is the tilt of the rotation axis relative to ecliptic North,
+RotAxisPhi is the orientation relative to the GSE X axis.
+TypeBField can be "NONE" or "DIPOLE".
 TypeBField="NONE" means that the planet does not have magnetic field.
 If TypeBField is set to "DIPOLE" then the following variables are read:
-MagAxisThetaGeo and MagAxisPhiGeo are the colatitude and longitude
-of the north magnetic pole in corotating planetocentric coordinates.
+MagAxisTheta and MagAxisPhi are the colatitude and longitude
+of the north magnetic pole in GSE coordinates.
 Finally DipoleStrength is the equatorial strength of the magnetic dipole
 field. The units are indicated in the above example, which shows the
 Earth values approximately.
 
-The default value is NamePlanet="Earth". Although many other planets
-and some of the moons are recognized, some of the parameters,
-like the equinox time are not yet properly set.
+The default value is NamePlanet="Earth".
 </command>
 
 <command name="ROTATIONAXIS" if="$_IsStandAlone">
@@ -591,6 +596,34 @@ Header line (is not read) - n m g h (follow this specific order)
 \end{verbatim}
 
 Where g and h are the Legendre coefficients in units of nT.
+</command>
+
+<command name="ORBIT" if="$_IsFirstSession">
+  <parameter name="OrbitalPeriodPlanet" type="real" min="0"/>
+  <parameter name="rOrbitPlanet"  type="real" min="0"/>
+  <parameter name="Eccentricity"  type="real" min="0" max="1"/>
+  <parameter name="Inclination"   type="real" min="0" max="90"/>
+  <parameter name="MeanLongitude" type="real" min="0" max="360"/>
+  <parameter name="LongitudePeri" type="real" min="0" max="360"/>
+  <parameter name="LongitudeNode" type="real" min="0" max="360"/>
+	
+#ORBIT
+3.14e7          OrbitalPeriodPlanet [s]	
+1.49e11         rOrbitPlanet [m]
+0.016           Eccentricity
+7.155           Inclination   [deg]
+122.4           MeanLongitude [deg]
+288.9           LongitudePeri [deg]
+174.9           LongitudeNode [deg]
+
+Set orbital parameters in HGI system. The inclination is relative to
+the HGI/solar equator. The MeanLongitude is the phase of the orbit
+assuming a constant angular velocity (this is then corrected to the
+true longitude). LongitudeNode is the location of the vernal equinox
+(only meaningful for non-zero Inclination) and LongitudePeri is the
+longitude of the perihelion (only meaningful for non-zero Eccentricity).
+
+The default values are defined in share/Library/src/ModPlanetConst.f90 
 </command>
 
 </commandgroup>
@@ -1463,8 +1496,8 @@ Default values are shown.
 </command>
 
 <command name="STAR" if="$_IsFirstSession">
-  <parameter name="RadiusStar" type="real" minimum="0" default="1"/>
-  <parameter name="MassStar"   type="real" minimum="0" default="1"/>
+  <parameter name="RadiusStar" type="real" min="0" default="1"/>
+  <parameter name="MassStar"   type="real" min="0" default="1"/>
   <parameter name="RotationPeriodStar" type="real"/>
 
 #STAR
@@ -1480,7 +1513,7 @@ By default the Sun is the central star.
 </command>
 
 <command name="ROTPERIOD">
-  <parameter name="RotPeriodSi" type="real" minimum="0"/>
+  <parameter name="RotPeriodSi" type="real" min="0"/>
 
 #ROTPERIOD
 0.0                     RotPeriodSI (in second)
@@ -1491,8 +1524,6 @@ since it also modifies the infrastructure (HGI to HGR stransformation matrix,
 Earth location, Carrington rotations etc). For this purpose #ROTPERIOD
 command works, which affects only the model, not the infrastructure.
 </command>
-
-
 
 <command name="NORMALIZATION" if="$_IsFirstSession">
   <parameter name="TypeNormalization" type="string" case="upper"
@@ -8646,7 +8677,7 @@ rel			TypeProjStop
 
 </commandgroup>
 
-<commandgroup name="COUPLING PARAMATERS">
+<commandgroup name="COUPLING PARAMETERS">
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!! COUPLING PARAMETERS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -8841,15 +8872,24 @@ By default the coupling is switched off.
 
 <command name="IEPRECIP">
   <parameter name="UseIePrecip" type="logical" default="F"/>
+  <parameter name="UseIeTraceState" type="logical" default="F"/>
 
 #IEPRECIP
 T                      UseIePrecip
+T                      UseIeTraceState
 
 If UseIePrecip is true, all pressure state variables, along with density and 
 poynting flux are gathered at rCurrents and passed to IE. This is not yet 
 implemented for multifluid MHD. 
 
-Default is UseIePrecip false.
+If UseIePrecip and #TRACEIE are both used, there are conflicting values along
+closed field lines. In this case, UseIeTraceState is used to determine which
+values are passed to IE. If UseIeTraceState is true, the values from field line
+traces are used. If UseIeTraceState is false, the values gathered at rCurrents
+are used. Traced values are more robust, but create a discontinuity with
+rCurrents values along the open closed field line boundary. 
+
+Default is UseIePrecip and UseIeTraceState are false.
 
 </command>
 
