@@ -3,8 +3,7 @@
 !  For more information, see http://csem.engin.umich.edu/tools/swmf
 module ModHallResist
 
-  use BATL_lib, ONLY: &
-       test_start, test_stop
+  use BATL_lib, ONLY: test_start, test_stop, iTest, jTest, kTest
   use ModBatsrusUtility, ONLY: stop_mpi
 
   use ModSize, ONLY: nI, nJ, nK, MaxDim, j0_, nJp1_, k0_, nKp1_
@@ -112,7 +111,6 @@ contains
     call test_stop(NameSub, DoTest)
   end subroutine init_hall_resist
   !============================================================================
-
   subroutine read_hall_param(NameCommand)
 
     use ModReadParam, ONLY: read_var
@@ -143,7 +141,6 @@ contains
     call test_stop(NameSub, DoTest)
   end subroutine read_hall_param
   !============================================================================
-
   subroutine set_ion_mass_per_charge(iBlock)
 
     use ModAdvance, ONLY: State_VGB, UseIdealEos, UseMultiSpecies
@@ -171,7 +168,6 @@ contains
     call test_stop(NameSub, DoTest, iBlock)
   end subroutine set_ion_mass_per_charge
   !============================================================================
-
   subroutine set_ion_mass_per_charge_point(State_V, IonMassPerChargeOut)
 
     use ModAdvance, ONLY: UseIdealEos, UseMultiSpecies
@@ -214,7 +210,6 @@ contains
 
   end subroutine set_ion_mass_per_charge_point
   !============================================================================
-
   subroutine set_hall_factor_cell(iBlock, UseIonMassPerCharge)
 
     use BATL_lib, ONLY: block_inside_regions
@@ -237,6 +232,7 @@ contains
        IsHallBlock = .true.
        HallFactor_C = HallFactorMax
     else
+       if(DoTest)write(*,*) NameSub,' calling block_inside_regions'
        call block_inside_regions(iRegionHall_I, iBlock, &
             size(HallFactor_C), 'cells', IsHallBlock, Value_I=HallFactor_C, &
             WeightDefaultIn=HallFactorMax)
@@ -252,6 +248,9 @@ contains
     ! Multiply with ion mass per charge
     call set_ion_mass_per_charge(iBlock)
     HallFactor_C = HallFactor_C*IonMassPerCharge_G(1:nI,1:nJ,1:nK)
+
+    if(DoTest)write(*,*) NameSub, ': HallFactor=', &
+         HallFactor_C(iTest,jTest,kTest)
 
     call test_stop(NameSub, DoTest, iBlock)
   end subroutine set_hall_factor_cell
@@ -320,6 +319,5 @@ contains
     call test_stop(NameSub, DoTest, iBlock)
   end subroutine set_hall_factor_face
   !============================================================================
-
 end module ModHallResist
 !==============================================================================

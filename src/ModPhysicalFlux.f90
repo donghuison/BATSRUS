@@ -106,8 +106,9 @@ contains
          iRhoIon_I, iUxIon_I, iUyIon_I, iUzIon_I, iPIon_I, &
          iRho, iRhoUx, iRhoUy, iRhoUz, iUx, iUy, iUz, iEnergy, iP, &
          IsIon_I, nIonFluid, UseMultiIon, ElectronPerMass_I, select_fluid
-    use ModPUI, ONLY: UsePuiDiffusion, DoPuiDiffusion_B
+    use ModPUI, ONLY: UsePuiDiffusion, DoPuiDiffusionBlock_B
     use ModGeometry, ONLY: r_GB
+    use ModPUI, ONLY: Pu3_
     use BATL_lib, ONLY: nDim, x_, y_, z_
 
     real, intent(in) :: State_V(nVar)      ! input primitive state
@@ -207,9 +208,9 @@ contains
          Flux_V(LevelHP_) = HallUn*State_V(LevelHP_)
 
     if(PuiFirst_ > 1)then
-       ! PUI scalar advect with first fluid's velocity
+       ! PUI scalar advect with second fluid's velocity
        do iVar = PuiFirst_, PuiLast_
-          Flux_V(iVar) = Un_I(1)*State_V(iVar)
+          Flux_V(iVar) = Un_I(Pu3_)*State_V(iVar)
        end do
     end if
 
@@ -333,7 +334,8 @@ contains
 
     if(EradFlux /= 0) Flux_V(Erad_) = Flux_V(Erad_) + EradFlux
     if(UsePuiDiffusion)then
-       if(DoPuiDiffusion_B(iBlockFace)) Flux_V(PuiFirst_:PuiLast_) = &
+       if(DoPuiDiffusionBlock_B(iBlockFace)) &
+            Flux_V(PuiFirst_:PuiLast_) = &
             Flux_V(PuiFirst_:PuiLast_) + FpuiFlux_I
     end if
     if(HeatFlux /= 0)then
@@ -395,9 +397,9 @@ contains
 
       ! Calculate energy and total pressure
       e = InvGammaMinus1*p + 0.5*(Rho*(Ux**2 + Uy**2 + Uz**2) + B2)
+      if(UseElectronEnergy) e = e + InvGammaElectronMinus1*State_V(Pe_)
 
       pTotal  = 0.5*B2 + B0x*Bx + B0y*By + B0z*Bz
-
       if(UseElectronPressure) pTotal = pTotal + PeAdd
 
       if(UseWavePressure)then

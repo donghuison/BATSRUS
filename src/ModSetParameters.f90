@@ -1347,6 +1347,18 @@ contains
                             call stop_mpi(NameSub//': unknown INS: '//  &
                                  StringInstrument_I(iInstrument))
                          end select
+                      case('psp')
+                         TypeSatPos_I(iFileInstrument) = 'psp'
+                         nPixel_I(iFileInstrument)         = 512
+                         MuLimbDarkening                   = 0.5
+                         select case(trim(NameInstrument))
+                         case('wispr')
+                            rSizeImage_I(iFileInstrument)  = 20.0
+                            rOccult_I(iFileInstrument)     = 3.0
+                         case default
+                            call stop_mpi(NameSub//': unknown INS: '//  &
+                                 StringInstrument_I(iInstrument))
+                         end select
                       case default
                          call stop_mpi(NameSub//': unknown satellite: '// &
                               StringInstrument_I(iInstrument))
@@ -2628,7 +2640,7 @@ contains
           call read_var('BdpDimBody2z', BdpDimBody2_D(3))
 
        case('#PLANET', '#MOON', '#COMET', '#ORBIT', &
-            '#IDEALAXES', '#ROTATIONAXIS', '#ROTATION', &
+            '#IDEALAXES', '#ROTATIONAXIS', '#ROTATION', '#MERIDIAN', &
             '#MAGNETICAXIS', '#MAGNETICCENTER', &
             '#DIPOLE', '#NONDIPOLE', '#MULTIPOLEB0', '#UPDATEB0')
 
@@ -2813,7 +2825,7 @@ contains
              end do
           end if
 
-       case("#PUIGRID", "#PUIDIFFUSION")
+       case("#PUIGRID", "#PUIDIFFUSION", '#PUICOMPRESSION')
           call read_pui_param(NameCommand)
 
           ! CORONA SPECIFIC COMMANDS
@@ -3853,17 +3865,28 @@ contains
               SpeedHypDim, ' ClightDim =', ClightDim, ''
       end if
 
-      if (UseAnisoPe .and. .not. UseAnisoPressure)  call stop_mpi(NameSub//  &
+      if (UseElectronPressure .and. ElectronPressureRatio == 0.0)then
+         ! Electrons should have a finite temperature in the initial
+         ! conditions and at the upstream boundary
+         ElectronTemperatureRatio = 1.0
+         ElectronPressureRatio = 1.0
+         PePerPtotal = 0.5
+      end if
+
+      if (UseAnisoPe .and. UseElectronEntropy) call stop_mpi(NameSub// &
+           ' UseAnisoPe cannot be used with UseElectronEntropy yet')
+
+      if (UseAnisoPe .and. .not. UseAnisoPressure)  call stop_mpi(NameSub// &
            ' UseAnisoPe cannot be applied without UseAnisoPressure')
 
       if (UseAnisoPe .and. UseHallResist) call stop_mpi(NameSub// &
            ': UseAnisoPe is not implemented for Hall Mhd.')
 
       if (UseAnisoPe .and. UseAlfvenWaveDissipation) call stop_mpi(NameSub// &
-           ' AnisoPe for coronal heating is not implemented yet')
+           ' UseAnisoPe for coronal heating is not implemented yet')
 
       if (UseAnisoPe .and. UseRadCooling) call stop_mpi(NameSub// &
-           ' AnisoPe for radiative cooling is not implemented yet')
+           ' UseAnisoPe for radiative cooling is not implemented yet')
 
       ! Fix NameSat_I if needed
       ! NameSat_I = 'none'  ! Disabled

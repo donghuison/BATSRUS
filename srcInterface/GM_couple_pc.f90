@@ -332,7 +332,8 @@ contains
 
           do k = 1, nK; do j = 1, nJ; do i = 1, nI
 
-             ! Intersection with body is not handled yet ???
+             ! The body is excluded at the patch level via the exclusion
+             ! regions of #PICREGIONMIN (see pic_set_cell_status).
 
              if(UseAdaptivePic) then
                 call is_inside_active_pic_region(Xyz_DGB(1:nDim,i,j,k,iBlock),&
@@ -374,10 +375,9 @@ contains
                 endif
 
                 do iVar = 1, nVar
-                   ! Check for positivity
+                   ! Check for positivity and NaN PC state.
                    if(DefaultState_V(iVar) > 0 .and. &
-                        State_VGB(iVar,i,j,k,iBlock) <= 0) then
-                      ! Use original MHD state if PC state is not positive
+                        .not. State_VGB(iVar,i,j,k,iBlock) > 0) then
                       State_VGB(:,i,j,k,iBlock) = State_V
                       EXIT
                    endif

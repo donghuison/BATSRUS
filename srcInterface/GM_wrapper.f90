@@ -306,6 +306,12 @@ contains
     ! Find array of points and return processor indexes owning them
     ! Could be generalized to return multiple processors...
 
+    ! Points outside the GM domain (inside the planet body, beyond the outer
+    ! boundary, or in a block that does not exist) return Unset_ and are
+    ! dropped by the point router (CON_couple_points/get_buffer_order), so
+    ! the target component never receives them. How the target fills such
+    ! nodes is the TARGET's responsibility.
+
     real:: Xyz_D(MaxDim) = 0.0
     integer:: iPoint, iBlock
 

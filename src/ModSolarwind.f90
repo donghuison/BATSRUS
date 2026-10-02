@@ -26,7 +26,7 @@ module ModSolarwind
 
   character(len=500):: NameSolarwindFile
 
-  integer, parameter :: nTimeVar = 7
+  integer, parameter :: MaxTimeVar = 7
 
   ! Number of data points in the input file
   integer :: nData = 0
@@ -112,7 +112,7 @@ contains
 
     character(len=500):: StringInputVar
 
-    integer :: iError, i , iVar, jVar, iYear, iVectorVar
+    integer :: iError, i , iVar, jVar, iYear, iVectorVar, nTimeVar
     logical :: UseZeroBx
 
     ! One line of input
@@ -120,7 +120,7 @@ contains
     character (len=20) :: String
 
     real    :: TmpData_V(nVar)
-    integer :: iTime_I(nTimeVar)
+    integer :: iTime_I(MaxTimeVar) = 0
 
     ! Tilt angle of the plane of the input data
     real :: PlaneAngleXY=0.0, PlaneAngleXZ=0.0
@@ -153,20 +153,54 @@ contains
        write(iUnitOut,*) NameSub,' reading ',trim(NameSolarwindFile)
     end if
 
+    ! Default number of time related columns
+    nTimeVar = MaxTimeVar
     ! Read header information
     do
        read(UnitTmp_,'(a)', iostat = iError ) StringLine
+       call upper_case(StringLine)
+       ! Check for line with variable names
+       if(  index(StringLine, 'YEAR ') > 0 .and. &
+            index(StringLine, ' BX ' ) > 1)then
+          ! Calculate number of time variables
+          if(  index(  StringLine, ' MSC '    ) > 1.or. &
+               index(  StringLine, ' MSEC '   ) > 1 .or. &
+               index(  StringLine, ' MILLISEC') > 1)then
+             nTimeVar = 7
+          elseif(index(StringLine, ' SC '     ) > 1 .or. &
+               index(  StringLine, ' SEC '    ) > 1 .or. &
+               index(  StringLine, ' SECOND ' ) > 1)then
+             nTimeVar = 6
+          elseif(index(StringLine, ' MN '     ) > 1 .or. &
+               index(  StringLine, ' MIN '    ) > 1 .or. &
+               index(  StringLine, ' MINUTE ' ) > 1)then
+             nTimeVar = 5
+          elseif(index(StringLine, ' HR '     ) > 1 .or. &
+               index(  StringLine, ' HOUR '   ) > 1)then
+             nTimeVar = 4
+          elseif(index(StringLine, ' DY '     ) > 1 .or. &
+               index(  StringLine, ' DAY '    ) > 1)then
+             nTimeVar = 3
+          elseif(index(StringLine, ' MO '     ) > 1 .or. &
+               index(  StringLine, ' MONTH '  ) > 1)then
+             nTimeVar = 2
+          else
+             ! Only year is present
+             nTimeVar = 1
+          endif
+          if(DoTest) write(*,*)NameSub, ': nTimeVar=', nTimeVar
+       end if
        if (iError /= 0) call stop_mpi(NameSub// &
             ': could not find #START in '//trim(NameSolarwindFile))
 
-       if(index(StringLine,'#REREAD')>0) read(UnitTmp_,*) DoReadAgain
+       if(index(StringLine, '#REREAD')>0) read(UnitTmp_,*) DoReadAgain
 
-       if(index(StringLine,'#COOR')>0)then
+       if(index(StringLine, '#COOR')>0)then
           read(UnitTmp_,'(a)') NameInputCoord
           call upper_case(NameInputCoord)
        endif
 
-       if(index(StringLine,'#PLANE')>0)then
+       if(index(StringLine, '#PLANE')>0)then
           read(UnitTmp_,*) PlaneAngleXY
           read(UnitTmp_,*) PlaneAngleXZ
           PlaneAngleXY = PlaneAngleXY * cDegToRad
@@ -174,7 +208,7 @@ contains
 
           ! Calculate normal vector
           if( abs(abs(PlaneAngleXY)-cHalfPi) < 1.0e-3 )then
-             Normal_D = [ 0.0, sign(1.0,PlaneAngleXY), 0.0 ]
+             Normal_D = [ 0.0, sign(1.0, PlaneAngleXY), 0.0 ]
           else if ( abs(abs(PlaneAngleXZ)-cHalfPi) < 1.0e-3 )then
              Normal_D = [ 0.0, 0.0, sign(1.0, PlaneAngleXZ) ]
           else
@@ -185,7 +219,7 @@ contains
           if(DoTest)write(*,*)'Normal propagation direction is',Normal_D
        endif
 
-       if(index(StringLine,'#VAR')>0)then
+       if(index(StringLine, '#VAR')>0)then
           read(UnitTmp_,'(a)', iostat = iError) StringInputVar
           call split_string(StringInputVar, nVar, NameInputVar_I, nVarInput)
           UseNumberDensity = .false.
@@ -194,9 +228,9 @@ contains
           iVarInput_V = 0
           if(DoTest)then
              write(*,*)'StringInputVar=', StringInputVar
-             write(*,*)'NameInputVar_I=',NameInputVar_I
-             write(*,*)'Max Number of input variables =',nVar
-             write(*,*)'user input number of variables=',nVarInput
+             write(*,*)'NameInputVar_I=', NameInputVar_I
+             write(*,*)'Max Number of input variables =', nVar
+             write(*,*)'user input number of variables=', nVarInput
           end if
 
           do iVar= 1, nVarInput
@@ -235,22 +269,22 @@ contains
           end do
        end if
 
-       if(index(StringLine,'#POSITION')>0)then
+       if(index(StringLine, '#POSITION') > 0)then
           read(UnitTmp_,*) SatelliteXyz_D(2)
           read(UnitTmp_,*) SatelliteXyz_D(3)
        endif
 
-       if(index(StringLine,'#SATELLITEXYZ')>0)then
+       if(index(StringLine, '#SATELLITEXYZ') > 0)then
           read(UnitTmp_,*) SatelliteXyz_D(1)
           read(UnitTmp_,*) SatelliteXyz_D(2)
           read(UnitTmp_,*) SatelliteXyz_D(3)
        endif
 
-       if(index(StringLine,'#ZEROBX')>0)    read(UnitTmp_,*) UseZeroBx
+       if(index(StringLine, '#ZEROBX') > 0) read(UnitTmp_,*) UseZeroBx
 
-       if(index(StringLine,'#TIMEDELAY')>0) read(UnitTmp_,*) TimeDelay
+       if(index(StringLine, '#TIMEDELAY') > 0) read(UnitTmp_,*) TimeDelay
 
-       if(index(StringLine,'#START')>0) EXIT
+       if(index(StringLine, '#START')>0) EXIT
     end do
 
     ! Set logicals telling if a variable is read from the input file
@@ -261,11 +295,18 @@ contains
     ! Get the number of input lines
     nData = 0
     do
-       read(UnitTmp_, *, IOSTAT=iError) iTime_I, TmpData_V(1:nVarInput)
+       read(UnitTmp_, *, IOSTAT=iError) iTime_I(1:nTimeVar), &
+            TmpData_V(1:nVarInput)
        if(iError /= 0) EXIT
        nData = nData + 1
     end do
 
+    if(nData == 0) then
+       call stop_mpi(NameSub// &
+            ' could not read data from '//trim(NameSolarwindFile))
+    else
+       if(DoTest) write(*,*) NameSub,': lines of data=', nData
+    end if
     ! For reading a new input file
     if(allocated(Solarwind_VI)) deallocate(Solarwind_VI, Time_I)
     allocate(Solarwind_VI(nVar,nData), Time_I(nData))
@@ -283,7 +324,8 @@ contains
     ! Read the data
     nData = 0
     do
-       read(UnitTmp_, *, IOSTAT=iError) iTime_I, TmpData_V(1:nVarInput)
+       read(UnitTmp_,*,IOSTAT=iError) &
+            iTime_I(1:nTimeVar), TmpData_V(1:nVarInput)
        if(iError /= 0) EXIT
 
        nData = nData + 1
@@ -330,20 +372,12 @@ contains
     ! Check if the start time is within 1 day of the input data
     if( StartTime + tSimulation < Time_I(1) - cDay .or. &
          StartTime > Time_I(nData)+cDay) then
-       write(*,*) "**********************************************************"
-       write(*,*) "*                                                        *"
-       write(*,*) "*      Warning! Warning! Warning! Warning! Warning!      *"
-       write(*,*) "*                                                        *"
-       write(*,*) "*  Time dependent solar wind file disagrees with the     *"
-       write(*,*) "*  starting time of the simulation by more than 24 hours.*"
-       write(*,*) "*  This could cause results which you may not enjoy.     *"
-       write(*,*) "*                                                        *"
-       if (UseStrict) call stop_mpi('Correct PARAM.in or the INPUT data file')
+       write(*,*) NameSub, &
+            ' WARDNING: solar wind file disagrees with start time'
+       write(*,*) NameSub, ' StartTime=', StartTime
+       write(*,*) 'nData, Time_I(nData)=', nData, Time_I(nData)
 
-       write(*,*) "*  I am assuming that you are smarter than I am.         *"
-       write(*,*) "*  Continuing with simulation.                           *"
-       write(*,*) "*                                                        *"
-       write(*,*) "**********************************************************"
+       if (UseStrict) call stop_mpi('Correct PARAM.in or the INPUT data file')
     endif
 
     if(lVerbose>0 .and. iProc==0)then
@@ -535,24 +569,20 @@ contains
        if(IsMhd .and. UseMultiIon)then
           Solarwind_V(p_) = sum(Solarwind_V(iPIon_I))
           if(.not.UseElectronPressure) &
-               Solarwind_V(p_) = (1+ElectronPressureRatio)*Solarwind_V(p_)
+               Solarwind_V(p_) = (1 + ElectronPressureRatio)*Solarwind_V(p_)
        end if
 
        if(UseAnisoPressure .and. .not. IsInput_V(Ppar_)) &
             Solarwind_V(pPar_) = Solarwind_V(p_)
 
-       if(UseElectronPressure .and. .not. IsInput_V(Pe_))then
-          if(ElectronPressureRatio > 0.0)then
+       if(UseElectronPressure)then
+          if(.not.IsInput_V(Pe_))then
              Solarwind_V(Pe_) = Solarwind_V(p_)*ElectronPressureRatio
+          elseif(UseElectronTemperature) then
+             Solarwind_V(Pe_) = max(Solarwind_V(Te_), SwTMinDim) &
+                  *Io2No_V(UnitTemperature_)*Solarwind_V(Rho_)
           else
-             Solarwind_V(Pe_) = Solarwind_V(p_)
-          end if
-       elseif(UseElectronPressure .and. IsInput_V(Pe_))then
-          if(UseElectronTemperature) then
-              Solarwind_V(Pe_) = max(Solarwind_V(Te_), SwTMinDim) &
-                   *Io2No_V(UnitTemperature_)*Solarwind_V(Rho_)
-          else
-            Solarwind_V(Pe_) = Solarwind_V(Pe_)*Io2No_V(UnitP_)
+             Solarwind_V(Pe_) = Solarwind_V(Pe_)*Io2No_V(UnitP_)
           end if
        end if
        if(UseAnisoPe .and. .not. IsInput_V(Pepar_)) &

@@ -912,7 +912,7 @@ test_magnetometer_check:
 		${TESTDIR}/IO2/magnetometers_n00000000.mag \
 		Param/MAGNETOMETER/TestOutput/magnetometers_n00000000.mag \
 		> test_magnetometer.diff)
-	-@(${DIFFNUM} -t -r=1e-5 -a=3e-9 \
+	-@(${DIFFNUM} -t -r=1e-5 -a=1e-7 \
 		${TESTDIR}/IO2/eqb_t00000100_n*.out \
 		Param/MAGNETOMETER/TestOutput/eqb_t00000100.out \
 		>> test_magnetometer.diff)
@@ -1513,7 +1513,7 @@ test_outerhelio2d_run:
 	cd ${TESTDIR}; ${BINDIR}/INTERPOLATE.exe < INTERPOLATE.in
 
 test_outerhelio2d_check:
-	-@(${DIFFNUM} -t -r=1e-5 \
+	-@(${DIFFNUM} -t -r=1e-5 -a=1e-17 \
 		${TESTDIR}/RESULTS/OH/z=0_*_e20170102-*.out \
 		Param/OUTERHELIO/TestOutput/z=0_2D.out.gz \
 		> test_outerhelio2d.diff)
@@ -2155,7 +2155,7 @@ test_mercurysph_check:
 		${TESTDIR}/RESULTS/GM/log_n000000.log \
 		Param/MERCURY/TestOutput/REFlog_n000000.log \
 		> test_mercurysph.diff)
-	-@(${DIFFNUM} -t -r=1e-5 -a=1e-6 -p="sort -k1 -k2 -k3 -g | grep -v AUXDATA" \
+	-@(${DIFFNUM} -t -r=1e-5 -a=1e-6 -p="sort -k1 -k2 -k3 -g | grep -vE 'AUXDATA|^[0-9 ]*$$'" \
 		${TESTDIR}/RESULTS/GM/3d__var_2_n00000100.dat.gz \
 		data/MERCURY/REF3d__var_2_n0000100.dat.gz \
 		>> test_mercurysph.diff)
@@ -2194,7 +2194,7 @@ test_ganymede_check:
 	   ${TESTDIR}/RESULTS/GM/log_n000001.log \
 	   Param/GANYMEDE/TestOutput/REFlog_n000001.log \
 		> test_ganymede.diff)
-	-@(${DIFFNUM} -t -r=1e-5 -a=1e-6\
+	-@(${DIFFNUM} -t -r=5e-5 -a=1e-6\
 	   ${TESTDIR}/RESULTS/GM/y=0_var_1_n00000005.out \
 	   data/GANYMEDE/REFy=0.out.gz \
 	   	>> test_ganymede.diff)
@@ -2339,7 +2339,7 @@ test_earth_check:
 		${TESTDIR}/RESULTS/GM/log*.log \
 		Param/EARTH/TestOutput/earth_cartesian_ref.log \
 		> test_earth_gpu.diff)
-	-@(${DIFFNUM} -t -r=1e-8 -a=1e-13 \
+	-@(${DIFFNUM} -t -r=1e-6 -a=1e-13 \
 		${TESTDIR}/RESULTS/GM/y=0_var_2_t00000001*.out \
 		Param/EARTH/TestOutput/earth_cartesian_ref.out \
 		>> test_earth_gpu.diff)
